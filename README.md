@@ -15,7 +15,7 @@ Aplicación web para controlar tu teléfono Android con scrcpy desde el navegado
 
 ## 🚀 Descarga
 
-Descarga el ejecutable desde [Releases](https://github.com/TU_USUARIO/scrcpy-web/releases)
+Descarga el ejecutable desde [Releases](https://github.com/Axel-Alvarenga/scrcpyweb/releases)
 
 ## 📋 Requisitos
 
