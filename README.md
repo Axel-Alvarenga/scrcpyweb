@@ -45,7 +45,7 @@ Descarga el ejecutable desde [Releases](https://github.com/TU_USUARIO/scrcpy-web
 
 ## 📸 Capturas
 
-![Interfaz](https://i.imgur.com/placeholder.png)
+![Interfaz]([https://i.imgur.com/placeholder.png](https://imgur.com/a/RC5sZtY))
 
 ## 📄 Licencia
 
@@ -53,4 +53,4 @@ MIT
 
 ## 👨‍💻 Autor
 
-[Tu Nombre]
+[Axel Alvarenga]
