@@ -1,0 +1,5 @@
+{
+  "calidad": "--max-size=2560 --max-fps=90 --video-bit-rate=16M",
+  "ventana": "",
+  "opciones_extra": ""
+}
