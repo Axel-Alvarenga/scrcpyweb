@@ -10,14 +10,13 @@ import webbrowser
 import time
 import atexit
 import signal
-import psutil
 
 # ============================================================
 #   DETERMINAR RUTAS
 # ============================================================
 if getattr(sys, 'frozen', False):
-    BASE_DIR = sys._MEIPASS
-    CONFIG_DIR = os.path.dirname(sys.executable)
+    BASE_DIR = os.path.dirname(sys.executable)
+    CONFIG_DIR = BASE_DIR
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CONFIG_DIR = BASE_DIR
@@ -34,50 +33,40 @@ IP_FILE = os.path.join(CONFIG_DIR, 'scrcpy_ip.txt')
 PUERTO = '5555'
 
 # ============================================================
-#   SISTEMA DE CIERRE AUTOMÁTICO
+#   RUTAS FIJAS (LAS QUE FUNCIONAN MANUALMENTE)
+# ============================================================
+RUTA_SCRCPY = r'C:\Users\chuva\OneDrive\Desktop\scrpywebexe\tools\scrcpy\scrcpy.exe'
+RUTA_ADB = r'C:\Users\chuva\OneDrive\Desktop\scrpywebexe\tools\scrcpy\adb.exe'
+
+# ============================================================
+#   SISTEMA DE CIERRE
 # ============================================================
 def cerrar_todo():
-    """Cierra todos los procesos hijos cuando termina el programa"""
     try:
-        proceso_actual = psutil.Process()
-        hijos = proceso_actual.children(recursive=True)
-        
-        for hijo in hijos:
-            try:
-                hijo.terminate()
-            except:
-                pass
-        
-        time.sleep(1)
-        
-        for hijo in hijos:
-            try:
-                hijo.kill()
-            except:
-                pass
-                
-        print("🧹 Todos los procesos cerrados correctamente.")
-    except Exception as e:
-        print(f"Error al cerrar procesos: {e}")
+        subprocess.run('taskkill /f /im scrcpy.exe', shell=True, capture_output=True)
+        print("🧹 Procesos cerrados.")
+    except:
+        pass
 
 def manejar_senal(sig, frame):
-    """Maneja señales de cierre (Ctrl+C, etc.)"""
-    print("\n🛑 Recibida señal de cierre...")
+    print("\n🛑 Cerrando...")
     cerrar_todo()
     sys.exit(0)
 
-# Registrar el cierre automático
 atexit.register(cerrar_todo)
 signal.signal(signal.SIGINT, manejar_senal)
 signal.signal(signal.SIGTERM, manejar_senal)
 
 # ============================================================
-#   FUNCIONES DE UTILIDAD
+#   FUNCIONES CON RUTAS FIJAS
 # ============================================================
 def ejecutar_comando(comando):
     try:
+        # Reemplazar 'adb' por la ruta completa
+        comando_modificado = comando.replace('adb', RUTA_ADB)
+        
         resultado = subprocess.run(
-            comando, 
+            comando_modificado, 
             shell=True, 
             capture_output=True, 
             text=True,
@@ -144,18 +133,32 @@ def matar_scrcpy():
     except:
         return False
 
+# ============================================================
+#   ABRIR SCRCPY CON RUTA FIJA
+# ============================================================
 def abrir_scrcpy_interno():
     try:
         matar_scrcpy()
         opciones_completas = obtener_opciones_completas()
-        comando = f'start scrcpy {opciones_completas}'
+        
+        # Usar la ruta fija que funciona manualmente
+        ruta_scrcpy = RUTA_SCRCPY
+        
+        # Comando exacto (el mismo que funciona manualmente)
+        comando = f'start {ruta_scrcpy} {opciones_completas}'
+        
+        print(f"🔍 Ejecutando: {comando}")
+        
         subprocess.Popen(comando, shell=True)
+        
+        print("✅ Scrcpy iniciado")
         return True
-    except:
+    except Exception as e:
+        print(f"❌ Error al abrir scrcpy: {e}")
         return False
 
 # ============================================================
-#   SERVIR FRONTEND
+#   RUTAS FRONTEND
 # ============================================================
 @app.route('/')
 def serve_frontend():
@@ -219,7 +222,6 @@ def activar_wifi():
 
 @app.route('/api/cerrar-servidor', methods=['POST'])
 def cerrar_servidor():
-    """Cierra el servidor cuando el usuario cierra el navegador"""
     def cerrar():
         time.sleep(1)
         print("🛑 Navegador cerrado. Cerrando servidor...")
@@ -233,8 +235,14 @@ def cerrar_servidor():
 def conectar():
     try:
         ip = obtener_ip_guardada()
+        
+        # Usar ADB con ruta completa
         ejecutar_comando(f'adb disconnect {ip}:{PUERTO}')
         resultado = ejecutar_comando(f'adb connect {ip}:{PUERTO}')
+        
+        print(f"📡 Conectando a {ip}:{PUERTO}")
+        print(f"📤 Salida: {resultado['stdout']}")
+        print(f"📥 Error: {resultado['stderr']}")
         
         if resultado['success']:
             verificar = ejecutar_comando('adb devices')
@@ -401,7 +409,7 @@ def opciones_disponibles():
     return jsonify(opciones)
 
 # ============================================================
-#   ABRIR NAVEGADOR Y CIERRE
+#   ABRIR NAVEGADOR
 # ============================================================
 def open_browser():
     time.sleep(2)
@@ -416,18 +424,14 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"  📁 Frontend: {FRONTEND_FOLDER}")
     print(f"  🌐 Abre tu navegador en: http://localhost:5000")
-    print(f"  ⏹️  Cierra el navegador o presiona CTRL+C para cerrar")
+    print(f"  📁 Scrcpy: {RUTA_SCRCPY}")
+    print(f"  📁 ADB: {RUTA_ADB}")
     print("=" * 60)
     
     threading.Thread(target=open_browser, daemon=True).start()
     
     try:
         app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
-    except KeyboardInterrupt:
-        print("\n🛑 Cerrando servidor...")
-        cerrar_todo()
-        sys.exit(0)
     except Exception as e:
         print(f"ERROR: {e}")
-        cerrar_todo()
-        sys.exit(1)
+        input("Presiona Enter para salir...")
