@@ -45,7 +45,7 @@ Descarga el ejecutable desde [Releases](https://github.com/TU_USUARIO/scrcpy-web
 
 ## 📸 Capturas
 
-![Interfaz](https://imgur.com/a/RC5sZtY)
+https://imgur.com/a/hfkN9zf
 
 ## 📄 Licencia
 
