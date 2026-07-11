@@ -1,15 +1,15 @@
 @echo off
-title SCRCPY WEB - CREAR .EXE
+title SCRCPY WEB - CREAR .EXE (VERSION FINAL)
 color 0A
 
 echo ============================================================
-echo   SCRCPY WEB - CREAR .EXE
+echo   SCRCPY WEB - CREAR .EXE (VERSION FINAL)
 echo ============================================================
 echo.
 
 cd /d "C:\Users\chuva\OneDrive\Desktop\scrpywebexe"
 
-echo [1/3] Construyendo Frontend...
+echo [1/4] Construyendo Frontend...
 cd frontend
 if not exist "node_modules" (
     echo Instalando dependencias...
@@ -25,7 +25,7 @@ cd ..
 echo ✅ Frontend construido
 
 echo.
-echo [2/3] Verificando scrcpy...
+echo [2/4] Verificando scrcpy...
 if exist "tools\scrcpy\scrcpy.exe" (
     echo ✅ scrcpy encontrado
 ) else (
@@ -35,11 +35,16 @@ if exist "tools\scrcpy\scrcpy.exe" (
 )
 
 echo.
-echo [3/3] Creando .exe...
+echo [3/4] Limpiando builds anteriores...
 cd backend
 if exist "dist" rmdir /s /q dist
 if exist "build" rmdir /s /q build
 if exist "*.spec" del /q *.spec
+echo ✅ Limpieza completada
+
+echo.
+echo [4/4] Creando .exe (con frontend empaquetado)...
+echo.
 
 pyinstaller --onefile ^
     --icon "logo.ico" ^
@@ -61,7 +66,10 @@ pyinstaller --onefile ^
     app.py
 
 if errorlevel 1 (
-    echo ERROR: Fallo la creacion
+    echo.
+    echo ============================================================
+    echo   ERROR: Fallo la creacion del .exe
+    echo ============================================================
     pause
     exit /b
 )
@@ -80,6 +88,9 @@ if exist "dist\SCRCPY-Web.exe" (
     echo.
     echo 1. Copia SCRCPY-Web.exe a una carpeta
     echo 2. Copia la carpeta tools\scrcpy\ junto al .exe
+    echo.
+    echo 🚀 El .exe funciona en CUALQUIER PC
+    echo    (usa rutas dinámicas, no rutas fijas)
     echo.
     start dist\SCRCPY-Web.exe
 ) else (

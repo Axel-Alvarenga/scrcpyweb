@@ -12,44 +12,85 @@ import atexit
 import signal
 
 # ============================================================
-#   DETERMINAR RUTAS
+#   RUTAS DINÁMICAS
 # ============================================================
-if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
-    CONFIG_DIR = BASE_DIR
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    CONFIG_DIR = BASE_DIR
+def obtener_ruta_base():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.dirname(os.path.abspath(__file__))
 
-FRONTEND_FOLDER = os.path.join(BASE_DIR, 'frontend', 'build')
-if not os.path.exists(FRONTEND_FOLDER):
-    FRONTEND_FOLDER = r'C:\Users\chuva\OneDrive\Desktop\scrpywebexe\frontend\build'
+def obtener_ruta_frontend():
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, 'frontend', 'build')
+    else:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend', 'build')
+
+# ============================================================
+#   CONFIGURACIÓN
+# ============================================================
+BASE_DIR = obtener_ruta_base()
+FRONTEND_FOLDER = obtener_ruta_frontend()
+
+CONFIG_FILE = os.path.join(BASE_DIR, 'scrcpy_config.json')
+IP_FILE = os.path.join(BASE_DIR, 'scrcpy_ip.txt')
+DEVICES_FILE = os.path.join(BASE_DIR, 'scrcpy_devices.json')
+
+RUTA_SCRCPY = os.path.join(BASE_DIR, 'tools', 'scrcpy', 'scrcpy.exe')
+RUTA_ADB = os.path.join(BASE_DIR, 'tools', 'scrcpy', 'adb.exe')
+
+PUERTO = '5555'
 
 app = Flask(__name__, static_folder=FRONTEND_FOLDER, static_url_path='')
 CORS(app)
 
-CONFIG_FILE = os.path.join(CONFIG_DIR, 'scrcpy_config.json')
-IP_FILE = os.path.join(CONFIG_DIR, 'scrcpy_ip.txt')
-PUERTO = '5555'
-
 # ============================================================
-#   RUTAS FIJAS (LAS QUE FUNCIONAN MANUALMENTE)
+#   FUNCIONES DE DISPOSITIVOS
 # ============================================================
-RUTA_SCRCPY = r'C:\Users\chuva\OneDrive\Desktop\scrpywebexe\tools\scrcpy\scrcpy.exe'
-RUTA_ADB = r'C:\Users\chuva\OneDrive\Desktop\scrpywebexe\tools\scrcpy\adb.exe'
-
-# ============================================================
-#   SISTEMA DE CIERRE
-# ============================================================
-def cerrar_todo():
+def obtener_dispositivos():
     try:
-        subprocess.run('taskkill /f /im scrcpy.exe', shell=True, capture_output=True)
-        print("🧹 Procesos cerrados.")
+        with open(DEVICES_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return [{'nombre': 'Mi Teléfono', 'ip': '192.168.100.47'}]
+
+def guardar_dispositivos(dispositivos):
+    try:
+        with open(DEVICES_FILE, 'w') as f:
+            json.dump(dispositivos, f, indent=2)
     except:
         pass
 
+# ============================================================
+#   FUNCIONES DE CIERRE
+# ============================================================
+def matar_scrcpy():
+    try:
+        subprocess.run('taskkill /f /im scrcpy.exe', shell=True, capture_output=True)
+        print("✅ Scrcpy cerrado.")
+        return True
+    except:
+        return False
+
+def matar_adb():
+    try:
+        subprocess.run(f'{RUTA_ADB} kill-server', shell=True, capture_output=True)
+        print("✅ ADB cerrado.")
+        return True
+    except Exception as e:
+        print(f"❌ Error al cerrar ADB: {e}")
+        return False
+
+def cerrar_todo():
+    try:
+        matar_scrcpy()
+        matar_adb()
+        print("🧹 Todos los procesos cerrados correctamente.")
+    except Exception as e:
+        print(f"❌ Error al cerrar: {e}")
+
 def manejar_senal(sig, frame):
-    print("\n🛑 Cerrando...")
+    print("\n🛑 Recibida señal de cierre...")
     cerrar_todo()
     sys.exit(0)
 
@@ -58,13 +99,11 @@ signal.signal(signal.SIGINT, manejar_senal)
 signal.signal(signal.SIGTERM, manejar_senal)
 
 # ============================================================
-#   FUNCIONES CON RUTAS FIJAS
+#   FUNCIONES PRINCIPALES
 # ============================================================
 def ejecutar_comando(comando):
     try:
-        # Reemplazar 'adb' por la ruta completa
         comando_modificado = comando.replace('adb', RUTA_ADB)
-        
         resultado = subprocess.run(
             comando_modificado, 
             shell=True, 
@@ -126,35 +165,48 @@ def obtener_opciones_completas():
         opciones_completas.append(opciones['opciones_extra'])
     return ' '.join([o for o in opciones_completas if o])
 
-def matar_scrcpy():
-    try:
-        subprocess.run('taskkill /f /im scrcpy.exe', shell=True, capture_output=True)
-        return True
-    except:
-        return False
-
-# ============================================================
-#   ABRIR SCRCPY CON RUTA FIJA
-# ============================================================
-def abrir_scrcpy_interno():
+def abrir_scrcpy_interno(ip=None):
     try:
         matar_scrcpy()
         opciones_completas = obtener_opciones_completas()
         
-        # Usar la ruta fija que funciona manualmente
-        ruta_scrcpy = RUTA_SCRCPY
+        if not os.path.exists(RUTA_SCRCPY):
+            print(f"❌ No se encontró scrcpy en: {RUTA_SCRCPY}")
+            return False
         
-        # Comando exacto (el mismo que funciona manualmente)
-        comando = f'start {ruta_scrcpy} {opciones_completas}'
+        # Si se proporciona IP, usar -s para dispositivo específico
+        if ip:
+            comando = f'start {RUTA_SCRCPY} -s {ip}:{PUERTO} {opciones_completas}'
+        else:
+            comando = f'start {RUTA_SCRCPY} {opciones_completas}'
         
         print(f"🔍 Ejecutando: {comando}")
-        
         subprocess.Popen(comando, shell=True)
-        
         print("✅ Scrcpy iniciado")
         return True
     except Exception as e:
         print(f"❌ Error al abrir scrcpy: {e}")
+        return False
+
+# ============================================================
+#   FUNCIÓN PARA DESCONECTAR TODOS LOS DISPOSITIVOS
+# ============================================================
+def desconectar_todos():
+    """Desconecta todos los dispositivos ADB"""
+    try:
+        resultado = ejecutar_comando('adb devices')
+        lineas = resultado['stdout'].split('\n')
+        
+        for linea in lineas:
+            if ':' in linea and 'device' in linea:
+                ip_puerto = linea.split()[0].strip()
+                if ip_puerto and ':' in ip_puerto:
+                    ejecutar_comando(f'adb disconnect {ip_puerto}')
+                    print(f"🔌 Desconectado: {ip_puerto}")
+        
+        return True
+    except Exception as e:
+        print(f"❌ Error al desconectar todos: {e}")
         return False
 
 # ============================================================
@@ -194,6 +246,125 @@ def set_ip():
     guardar_ip(nueva_ip)
     return jsonify({'success': True, 'ip': nueva_ip})
 
+# ============================================================
+#   ENDPOINTS DE DISPOSITIVOS
+# ============================================================
+@app.route('/api/dispositivos', methods=['GET'])
+def get_dispositivos():
+    return jsonify({'dispositivos': obtener_dispositivos()})
+
+@app.route('/api/dispositivos', methods=['POST'])
+def agregar_dispositivo():
+    try:
+        data = request.json
+        nombre = data.get('nombre', '')
+        ip = data.get('ip', '')
+        
+        if not nombre or not ip:
+            return jsonify({'error': 'Nombre e IP son requeridos'}), 400
+        
+        dispositivos = obtener_dispositivos()
+        
+        for d in dispositivos:
+            if d['ip'] == ip:
+                return jsonify({'error': 'Esta IP ya está registrada'}), 400
+        
+        dispositivos.append({'nombre': nombre, 'ip': ip})
+        guardar_dispositivos(dispositivos)
+        
+        return jsonify({'success': True, 'dispositivos': dispositivos})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dispositivos/<ip>', methods=['DELETE'])
+def eliminar_dispositivo(ip):
+    try:
+        dispositivos = obtener_dispositivos()
+        dispositivos = [d for d in dispositivos if d['ip'] != ip]
+        guardar_dispositivos(dispositivos)
+        return jsonify({'success': True, 'dispositivos': dispositivos})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dispositivos/<ip>', methods=['PUT'])
+def editar_dispositivo(ip):
+    try:
+        data = request.json
+        nuevo_nombre = data.get('nombre', '')
+        nueva_ip = data.get('ip', '')
+        
+        if not nuevo_nombre or not nueva_ip:
+            return jsonify({'error': 'Nombre e IP son requeridos'}), 400
+        
+        dispositivos = obtener_dispositivos()
+        
+        for i, d in enumerate(dispositivos):
+            if d['ip'] == ip:
+                if nueva_ip != ip:
+                    for otro in dispositivos:
+                        if otro['ip'] == nueva_ip:
+                            return jsonify({'error': 'Esta IP ya está registrada'}), 400
+                dispositivos[i] = {'nombre': nuevo_nombre, 'ip': nueva_ip}
+                guardar_dispositivos(dispositivos)
+                return jsonify({'success': True, 'dispositivos': dispositivos})
+        
+        return jsonify({'error': 'Dispositivo no encontrado'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dispositivos/seleccionar', methods=['POST'])
+def seleccionar_dispositivo():
+    try:
+        data = request.json
+        ip = data.get('ip', '')
+        
+        if not ip:
+            return jsonify({'error': 'IP requerida'}), 400
+        
+        guardar_ip(ip)
+        return jsonify({'success': True, 'ip': ip})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================
+#   ENDPOINT CONEXIÓN MULTI-DISPOSITIVO
+# ============================================================
+@app.route('/api/conectar-dispositivo', methods=['POST'])
+def conectar_dispositivo():
+    """Conecta un dispositivo específico sin desconectar los demás"""
+    try:
+        data = request.json
+        ip = data.get('ip', '')
+        nombre = data.get('nombre', '')
+        
+        if not ip:
+            return jsonify({'error': 'IP requerida'}), 400
+        
+        print(f"📡 Conectando a {ip}:{PUERTO}")
+        resultado = ejecutar_comando(f'adb connect {ip}:{PUERTO}')
+        
+        print(f"📤 Salida: {resultado['stdout']}")
+        print(f"📥 Error: {resultado['stderr']}")
+        
+        if resultado['success']:
+            verificar = ejecutar_comando('adb devices')
+            if ip in verificar['stdout']:
+                opciones_completas = obtener_opciones_completas()
+                comando = f'start {RUTA_SCRCPY} -s {ip}:{PUERTO} {opciones_completas}'
+                subprocess.Popen(comando, shell=True)
+                return jsonify({
+                    'success': True, 
+                    'message': f'✅ {nombre} conectado',
+                    'ip': ip
+                })
+        
+        return jsonify({'success': False, 'message': f'❌ No se pudo conectar {nombre}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+# ============================================================
+#   OTROS ENDPOINTS
+# ============================================================
 @app.route('/api/activar-wifi', methods=['POST'])
 def activar_wifi():
     try:
@@ -224,7 +395,7 @@ def activar_wifi():
 def cerrar_servidor():
     def cerrar():
         time.sleep(1)
-        print("🛑 Navegador cerrado. Cerrando servidor...")
+        print("🛑 Navegador cerrado. Cerrando todo...")
         cerrar_todo()
         os._exit(0)
     
@@ -236,11 +407,14 @@ def conectar():
     try:
         ip = obtener_ip_guardada()
         
-        # Usar ADB con ruta completa
-        ejecutar_comando(f'adb disconnect {ip}:{PUERTO}')
-        resultado = ejecutar_comando(f'adb connect {ip}:{PUERTO}')
+        print("🔌 Desconectando todos los dispositivos...")
+        desconectar_todos()
+        
+        time.sleep(1)
         
         print(f"📡 Conectando a {ip}:{PUERTO}")
+        resultado = ejecutar_comando(f'adb connect {ip}:{PUERTO}')
+        
         print(f"📤 Salida: {resultado['stdout']}")
         print(f"📥 Error: {resultado['stderr']}")
         
@@ -248,7 +422,7 @@ def conectar():
             verificar = ejecutar_comando('adb devices')
             if ip in verificar['stdout']:
                 matar_scrcpy()
-                abrir_scrcpy_interno()
+                abrir_scrcpy_interno(ip)
                 return jsonify({'success': True, 'message': f'Conectado a {ip}:{PUERTO}'})
         
         return jsonify({'success': False, 'message': 'No se pudo conectar'})
@@ -261,14 +435,16 @@ def desconectar():
         ip = obtener_ip_guardada()
         ejecutar_comando(f'adb disconnect {ip}:{PUERTO}')
         matar_scrcpy()
-        return jsonify({'success': True, 'message': 'Desconectado'})
+        matar_adb()
+        return jsonify({'success': True, 'message': 'Desconectado y ADB cerrado'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/api/abrir-scrcpy', methods=['POST'])
 def abrir_scrcpy():
     try:
-        if abrir_scrcpy_interno():
+        ip = obtener_ip_guardada()
+        if abrir_scrcpy_interno(ip):
             return jsonify({'success': True, 'message': 'Scrcpy iniciado'})
         else:
             return jsonify({'success': False, 'message': 'No se pudo iniciar scrcpy'})
@@ -297,8 +473,8 @@ def estado():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/dispositivos', methods=['GET'])
-def dispositivos():
+@app.route('/api/dispositivos-adb', methods=['GET'])
+def dispositivos_adb():
     resultado = ejecutar_comando('adb devices')
     return jsonify({'dispositivos': resultado['stdout']})
 
@@ -422,10 +598,11 @@ if __name__ == '__main__':
     print("=" * 60)
     print("  📱 SCRCPY WEB - SERVIDOR INICIADO")
     print("=" * 60)
+    print(f"  📁 Carpeta: {BASE_DIR}")
     print(f"  📁 Frontend: {FRONTEND_FOLDER}")
-    print(f"  🌐 Abre tu navegador en: http://localhost:5000")
     print(f"  📁 Scrcpy: {RUTA_SCRCPY}")
     print(f"  📁 ADB: {RUTA_ADB}")
+    print(f"  🌐 Abre tu navegador en: http://localhost:5000")
     print("=" * 60)
     
     threading.Thread(target=open_browser, daemon=True).start()
